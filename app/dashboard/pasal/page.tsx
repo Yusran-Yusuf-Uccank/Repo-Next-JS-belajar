@@ -10,7 +10,7 @@ type FlowState = 'reading' | 'decision' | 'signing';
 export default function SignaturePage() {
   const router = useRouter(); // Inisialisasi router
   const [flowState, setFlowState] = useState<FlowState>('reading');
-  const sigCanvas = useRef<SignatureCanvas>(null);
+  const sigCanvas = useRef<SignatureCanvas>(null) as React.RefObject<SignatureCanvas>;
   
   const PDF_URL = "https://drive.google.com/uc?id=1MNvVCYDXzTXpxCgL2g9eEElQJJGeG7KQ";
 
