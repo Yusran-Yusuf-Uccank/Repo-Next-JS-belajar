@@ -125,7 +125,7 @@ export default function SignaturePage() {
         />
 
         <p className="text-center text-[10px] text-gray-400 uppercase tracking-widest">
-          Digital Signature Verification System
+          Proto Tanda Tangan Digital
         </p>
 
       </div>
