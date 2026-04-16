@@ -1,79 +1,132 @@
 'use client';
-
-import React, { useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import React, { useState, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
-import { Button } from '@/app/ui/button';
+import { DocumentViewer } from '@/app/ui/dashboard/DocumentViewer';
+import { SignatureForm } from '@/app/ui/dashboard/SignatureForm';
+
+type FlowState = 'reading' | 'decision' | 'signing';
 
 export default function SignaturePage() {
-  const [showSignForm, setShowSignForm] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const router = useRouter(); // Inisialisasi router
+  const [flowState, setFlowState] = useState<FlowState>('reading');
   const sigCanvas = useRef<SignatureCanvas>(null);
-
-  // Ganti BASE_URL dengan folder tempat kamu simpan 18 gambar tadi
-  // Contoh: https://raw.githubusercontent.com/username/repo/main/public/pasal/
-  const imageBaseUrl = "https://link-hosting-kamu.com/pasal/";
   
-  const totalPages = 18;
-  const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+  const PDF_URL = "https://drive.google.com/uc?id=1MNvVCYDXzTXpxCgL2g9eEElQJJGeG7KQ";
 
-  const handleScroll = () => {
-    if (scrollRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-      
-      // Deteksi halaman ke-18 (paling bawah)
-      const isAtBottom = scrollTop + clientHeight >= scrollHeight - 50;
-
-      if (isAtBottom && !showSignForm) {
-        setShowSignForm(true);
-      }
+  const handleOverscroll = () => {
+    if (flowState === 'reading') {
+      setFlowState('decision');
+      setTimeout(() => {
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      }, 100);
     }
   };
 
+  const handleReject = () => {
+    const confirmReject = confirm("Apakah Anda yakin ingin menolak dokumen ini?");
+    if (confirmReject) {
+      alert("Anda telah menolak dokumen ini.");
+      setFlowState('reading'); 
+    }
+  };
+
+  const handleApprove = () => {
+    setFlowState('signing');
+    setTimeout(() => {
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }, 100);
+  };
+
+ const handleSubmitSignature = async (data: string | null) => {
+  if (!data || sigCanvas.current?.isEmpty()) {
+    alert("Silakan tanda tangan terlebih dahulu");
+    return;
+  }
+
+  try {
+    // 1. DOWNLOAD SEBAGAI PNG (Opsional, jika ingin user punya salinannya)
+    const link = document.createElement('a');
+    link.href = data; // 'data' sudah dalam format image/png oleh signature-canvas
+    link.download = `tanda-tangan-${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // 2. KONVERSI KE BLOB/FILE (Untuk dikirim ke Server/API)
+    // Ini mengubah string Base64 menjadi file PNG biner yang sesungguhnya
+    const blob = await fetch(data).then((res) => res.blob());
+    const file = new File([blob], "signature.png", { type: "image/png" });
+
+    // Contoh jika ingin dikirim via FormData ke API
+    // const formData = new FormData();
+    // formData.append('file', file);
+    // await axios.post('/api/upload', formData);
+
+    console.log("File PNG siap dikirim:", file);
+    alert("Tanda tangan berhasil diunduh sebagai PNG!");
+    router.replace('/dashboard');
+  } catch (error) {
+    console.error("Gagal memproses PNG:", error);
+    alert("Terjadi kesalahan saat memproses gambar.");
+  }
+};
+
   return (
-    <div className="flex flex-col min-h-screen bg-gray-100 p-4">
-      <div className="max-w-3xl mx-auto w-full flex flex-col gap-4">
+    <div className="flex flex-col min-h-screen bg-gray-100 p-4 md:p-8">
+      <div className="max-w-3xl mx-auto w-full flex flex-col gap-6">
         
-        {/* Kontainer Dokumen */}
-        <div className={`transition-all duration-700 border-2 border-blue-200 rounded-xl bg-white shadow-lg flex flex-col ${showSignForm ? 'h-[40vh]' : 'h-[85vh]'}`}>
-          
-          <div className="p-4 border-b bg-blue-50 rounded-t-xl flex justify-between items-center">
-            {/*<h1 className="font-bold text-blue-900">Dokumen Pasal (18 Halaman)</h1>*/}
-            {!showSignForm && <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full animate-pulse">Scroll sampai halaman terakhir</span>}
-          </div>
+        {/* PDF VIEWER - Sekarang menggunakan Default Export */}
+        <DocumentViewer 
+          pdfUrl={PDF_URL}
+          isCompact={flowState !== 'reading'} 
+          onOverscroll={handleOverscroll}
+          onScrollUp={() => setFlowState('reading')}
+        />
 
-          {/* Area Scroll Gambar */}
-          <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto bg-gray-400 p-2 space-y-1">
-            <div className="max-w-2xl mx-auto shadow-2xl">
-              {pages.map((num) => (
-                <img 
-                  key={num}
-                  src={`${imageBaseUrl}halaman-${num}.jpg`} 
-                  alt={`Halaman ${num}`}
-                  className="w-full h-auto block bg-white"
-                  loading="lazy" // Penting: Agar client tidak berat saat loading awal
-                />
-              ))}
-            </div>
-
-            <div className="h-20 flex items-center justify-center bg-white border-t mt-4">
-               <p className="text-sm font-bold text-blue-600">--- AKHIR HALAMAN 18 ---</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Form Tanda Tangan */}
-        <div className={`transition-all duration-1000 transform ${showSignForm ? 'opacity-100 scale-100 h-auto' : 'opacity-0 scale-95 h-0 overflow-hidden'}`}>
-          <div className="bg-white p-6 rounded-xl border-2 border-blue-100 shadow-xl">
-            <label className="block text-sm font-bold text-gray-700 mb-2">Tanda Tangan Digital:</label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 mb-4 h-48">
-              <SignatureCanvas ref={sigCanvas} penColor="black" canvasProps={{className: 'sigCanvas w-full h-full'}} />
-            </div>
-            <div className="flex gap-3">
-              <Button onClick={() => sigCanvas.current?.clear()} variant="outline" className="flex-1">Ulangi</Button>
-              <Button className="flex-[2] bg-blue-700 text-white font-bold">Kirim Persetujuan</Button>
+        {/* --- KOTAK KEPUTUSAN --- */}
+        <div className={`transition-all duration-700 transform origin-top ${
+          flowState === 'decision' 
+            ? 'opacity-100 scale-100 h-auto' 
+            : 'opacity-0 scale-95 h-0 overflow-hidden'
+        }`}>
+          <div className="bg-white p-8 rounded-xl border-2 border-gray-200 shadow-lg text-center flex flex-col items-center">
+            <h2 className="text-xl font-bold text-gray-800 mb-2">Persetujuan Dokumen</h2>
+            <p className="text-gray-500 mb-6 text-sm">
+              Apakah Anda menyetujui seluruh pasal dan ketentuan yang tertera di dalam dokumen di atas?
+            </p>
+            
+            <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
+              {/* Tombol Reject Tanpa Lucide */}
+              <button 
+                onClick={handleReject}
+                className="flex-1 flex justify-center items-center gap-2 max-w-[200px] px-6 py-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold rounded-lg transition-colors"
+              >
+                <span>✕</span> Tolak
+              </button>
+              
+              {/* Tombol Approve Tanpa Lucide */}
+              <button 
+                onClick={handleApprove}
+                className="flex-1 flex justify-center items-center gap-2 max-w-[200px] px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-md hover:shadow-lg transition-all"
+              >
+                <span>✓</span> Setujui
+              </button>
             </div>
           </div>
         </div>
+
+        {/* --- KANVAS TANDA TANGAN --- */}
+        <SignatureForm 
+          isVisible={flowState === 'signing'}
+          sigRef={sigCanvas}
+          onClear={() => sigCanvas.current?.clear()}
+          onSubmit={handleSubmitSignature}
+        />
+
+        <p className="text-center text-[10px] text-gray-400 uppercase tracking-widest">
+          Digital Signature Verification System
+        </p>
 
       </div>
     </div>
